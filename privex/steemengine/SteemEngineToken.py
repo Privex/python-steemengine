@@ -1,5 +1,7 @@
 import logging
 from decimal import Decimal, ROUND_DOWN, getcontext
+
+from beem.blockchain import Blockchain
 from beem.instance import shared_steem_instance
 from privex.jsonrpc import SteemEngineRPC
 from privex.steemengine import exceptions
@@ -110,6 +112,25 @@ class SteemEngineToken:
             limit=limit, offset=offset
         )
 
+    def find_steem_tx(self, tx_data, last_blocks=15):
+        """
+        Used internally to get the transaction ID after a transaction has been broadcasted
+
+        :param dict tx_data:      Transaction data returned by a beem broadcast operation, must include 'signatures'
+        :param int last_blocks:   Amount of previous blocks to search for the transaction
+        :return dict:             Transaction data from the blockchain {transaction_id, ref_block_num, ref_block_prefix,
+                                    expiration, operations, extensions, signatures, block_num, transaction_num}
+        :return None:             If the transaction wasn't found, None will be returned.
+        """
+        # Code taken/based from @holgern/beem blockchain.py
+        chain = Blockchain(steem_instance=self.steem, mode='head')
+        current_num = chain.get_current_block_num()
+        for block in chain.blocks(start=current_num - last_blocks, stop=current_num + 5):
+            for tx in block.transactions:
+                if sorted(tx["signatures"]) == sorted(tx_data["signatures"]):
+                    return tx
+        return None
+
     def list_transactions(self, user, symbol=None, limit=100, offset=0) -> list:
         """
         Get the Steem Engine transaction history for a given account
@@ -138,7 +159,7 @@ class SteemEngineToken:
             query=dict(symbol=symbol.upper())
         )
 
-    def send_token(self, symbol, from_acc, to_acc, amount: Decimal, memo=""):
+    def send_token(self, symbol, from_acc, to_acc, amount: Decimal, memo="", find_tx=True) -> dict:
         """
         Sends a given `amount` of `symbol` from `from_acc` to `to_acc` with the memo `memo`.
         You must have the active key for `from_acc` in your Beem wallet.
@@ -150,12 +171,19 @@ class SteemEngineToken:
         :param str to_acc:     The account name you want to send to
         :param Decimal amount: The amount of tokens to send. Will be casted to Decimal()
         :param memo:           The memo to send with. If not specified, will sent with blank memo
+        :param find_tx:        If you don't care about info such as the TXID, and what block it's in, set to False.
         :raises ArithmeticError:  When the amount is lower than the lowest amount allowed by the token's precision
         :raises NotEnoughBalance: When `from_acc` does not have enough token balance to send this `amount`
         :raises AccountNotFound:  When either the `from_acc` or `to_acc` does not exist
         :raises TokenNotFound:    When the requested token `symbol` does not exist
         :raises beem.exceptions.MissingKeyError: No active key found for the `from_acc` in beem wallet
-        :return: Broadcast info {expiration, ref_block_num, ref_block_prefix, operations, extensions, signatures}
+
+        :return dict: If TX was found on chain, more in-depth data including TXID
+                      {transaction_id, ref_block_num, ref_block_prefix, expiration, operations, extensions, signatures,
+                       block_num, transaction_num}
+
+        :return dict: If TX not found on chain, returns broadcast info:
+                      {expiration, ref_block_num, ref_block_prefix, operations, extensions, signatures}
         """
         t = self.get_token(symbol)
         if t is None:
@@ -191,27 +219,39 @@ class SteemEngineToken:
                 memo=memo
             )
         )
-        return self.steem.custom_json(self.network_account, custom, [from_acc])
+        j = self.steem.custom_json(self.network_account, custom, [from_acc])
+        if find_tx:    # Find the transaction on the blockchain to get TXID and other data from it.
+            tx = self.find_steem_tx(j)
+            return j if tx is None else tx
+        return j
 
-    def issue_token(self, symbol, to, amount):
+    def issue_token(self, symbol: str, to: str, amount: Decimal, find_tx=True) -> dict:
         """
         Issues a specified amount `amount` of `symbol` to the Steem account `to`
         Automatically queries Steem Engine API to find issuer of the token, and broadcast using Beem
         You must have the active key of the token issuer account in your Beem wallet.
 
-        :param symbol: The symbol of the token to issue, e.g. ENG
-        :param to: The Steem username to issue the tokens to
-        :param amount: The amount of tokens to issue.
+        :param symbol:   The symbol of the token to issue, e.g. ENG
+        :param to:       The Steem username to issue the tokens to
+        :param amount:   The amount of tokens to issue, will be casted to a Decimal
+        :param find_tx:  If you don't care about info such as the TXID, and what block it's in, set to False.
         :raises ArithmeticError:  When the amount is lower than the lowest amount allowed by the token's precision
         :raises TokenNotFound: When a token does not exist
         :raises AccountNotFound: When the `to` account doesn't exist on Steem
         :raises beem.exceptions.MissingKeyError: No active key found for the issuer in beem wallet
-        :return: Broadcast info {expiration, ref_block_num, ref_block_prefix, operations, extensions, signatures}
+
+        :return dict: If TX was found on chain, more in-depth data including TXID
+                      {transaction_id, ref_block_num, ref_block_prefix, expiration, operations, extensions, signatures,
+                       block_num, transaction_num}
+
+        :return dict: If TX not found on chain, returns broadcast info:
+                      {expiration, ref_block_num, ref_block_prefix, operations, extensions, signatures}
         """
         t = self.get_token(symbol)
+        amount = Decimal(amount)
         if t is None:
             raise exceptions.TokenNotFound('Token {} does not exist'.format(t))
-        if Decimal(amount) < Decimal(pow(10, -t['precision'])):
+        if amount < Decimal(pow(10, -t['precision'])):
             log.warning('Amount %s was passed, but is lower than precision for %s', amount, symbol)
             raise ArithmeticError('Amount {} is lower than token {}s precision of {} DP'
                                   .format(amount, symbol, t['precision']))
@@ -229,7 +269,12 @@ class SteemEngineToken:
                 quantity=('{0:.' + str(t['precision']) + 'f}').format(amount)
             )
         )
-        return self.steem.custom_json(self.network_account, custom, [t['issuer']])
+        j = self.steem.custom_json(self.network_account, custom, [t['issuer']])
+        if find_tx:    # Find the transaction on the blockchain to get TXID and other data from it.
+            tx = self.find_steem_tx(j)
+            return j if tx is None else tx
+        return j
+
 
 
 """
