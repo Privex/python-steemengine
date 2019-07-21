@@ -4,6 +4,7 @@ from typing import Union, List
 from privex.jsonrpc import SteemEngineRPC
 from privex.steemengine import exceptions
 from privex.steemengine.SteemEngineHistory import SteemEngineHistory
+from privex.steemengine.objects import SEBalance, SETransaction, Token
 from privex.helpers import empty
 
 log = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ class SteemEngineToken:
         SteemEngineToken._steem = Steem(node, *args, **kwargs)
         return SteemEngineToken._steem
 
-    def get_balances(self, user) -> List[dict]:
+    def get_balances(self, user) -> List[SEBalance]:
         """
         Get all token balances for a user.
 
@@ -104,20 +105,20 @@ class SteemEngineToken:
 
             >>> balances = SteemEngineToken().get_balances('someguy123')
             >>> for bal in balances:
-            ...     print(f"{bal['symbol']} balance is: {bal['balance']}")
+            ...     print(f"{bal.symbol} balance is: {bal.balance}")
             ENG balance is: 12.345
             SGTK balance is: 51235
             STEEMP balance is: 102.437
 
         :param user: Username to find all token balances for
-        :return list<dict> balances: All balances of a user [{account:str, symbol:str, balance:str}...]
+        :return list<SEBalance> balances: All balances of a user [{account:str, symbol:str, balance:str}...]
         """
         log.debug('Finding all token balances for user %s', user)
-        return self.rpc.find(
+        return list(SEBalance.from_list(self.rpc.find(
             contract='tokens',
             table='balances',
             query=dict(account=user)
-        )
+        )))
 
     def get_token_balance(self, user, symbol) -> Decimal:
         """
@@ -159,14 +160,14 @@ class SteemEngineToken:
         log.debug('Checking if user %s exists', user)
         return len(self.steem.rpc.get_account(user)) > 0
 
-    def list_tokens(self, limit=1000, offset=0) -> List[dict]:
+    def list_tokens(self, limit=1000, offset=0) -> List[Token]:
         """
-        Returns a list of all tokens.
+        Returns a list of all tokens as :class:`.Token` objects.
 
         **Example:**
 
             >>> for t in SteemEngineToken().list_tokens():
-            ...     print(f"Token {t['symbol']} has a max supply of {t['maxSupply']} and issued by {t['issuer']}")
+            ...     print(f"Token {t.symbol} has a max supply of {t.max_supply} and issued by {t.issuer}")
             Token ENG has a max supply of 9007199254740991 and issued by null
             Token STEEMP has a max supply of 1000000000000 and issued by steem-peg
             Token BTCP has a max supply of 1000000000000 and issued by btcpeg
@@ -174,7 +175,7 @@ class SteemEngineToken:
 
         :param limit: Amount of token objects to retrieve
         :param offset: Amount of token objects to skip (for pagination)
-        :return list<dict> tokens: Each list item formatted like this:
+        :return List<Token> tokens: Each :class:`.Token` list item formatted like this:
 
         .. code-block:: js
 
@@ -190,12 +191,12 @@ class SteemEngineToken:
             }
         
         """
-        return self.rpc.find(
+        return list(Token.from_list(self.rpc.find(
             contract='tokens',
             table='tokens',
             query={},
             limit=limit, offset=offset
-        )
+        )))
 
     def find_steem_tx(self, tx_data: dict, last_blocks=15) -> dict:
         """
@@ -228,14 +229,14 @@ class SteemEngineToken:
                     return tx
         return None
 
-    def list_transactions(self, user, symbol=None, limit=100, offset=0) -> List[dict]:
+    def list_transactions(self, user, symbol=None, limit=100, offset=0) -> List[SETransaction]:
         """
         Get the Steem Engine transaction history for a given account
 
         **Example:**
 
             >>> for tx in SteemEngineToken().list_transactions('someguy123'):
-            ...     print(tx['timestamp'], tx['from'], 'sent', tx['quantity'], tx['symbol'], 'to', tx['to'])
+            ...     print(tx.timestamp, tx.sender, 'sent', tx.quantity, tx.symbol, 'to', tx.to)
             2019-07-04T06:18:09.000Z market sent 100 SGTK to someguy123
             2019-07-04T01:01:15.000Z minnowsupport sent 0.924 PAL to someguy123
             2019-07-03T17:10:36.000Z someguy123 sent 1 BTSP to btsp
@@ -244,27 +245,32 @@ class SteemEngineToken:
         :param str symbol: Symbol to filter by, e.g. ENG (optional)
         :param int limit: Return this many transactions (optional)
         :param int offset: Skip this many transactions (for pagination) (optional)
-        :return List<dict> txs: A list of ``dict(block, txid, timestamp, symbol, from, from_type, to, to_type, memo, quantity)``
+        :return List<SETransaction> txs: A list of :class:`.SETransaction` containing 
+        
+            block, txid, timestamp, symbol, sender, from_type, to, to_type, memo, quantity
+        
         """
         symbol = None if empty(symbol) else symbol.upper()
         log.debug('Getting TX history for user %s, symbol %s, limit %s, offset %s', user, symbol, limit, offset)
-        return self.history_rpc.get_history(account=user, symbol=symbol, limit=limit, offset=offset)
+        return list(SETransaction.from_list(self.history_rpc.get_history(account=user, symbol=symbol, limit=limit, offset=offset)))
 
-    def get_token(self, symbol) -> dict:
+    def get_token(self, symbol) -> Token:
         """
         Get the token object for an individual token.
 
         **Example:**
 
             >>> token = SteemEngineToken().get_token('SGTK'):
-            >>> print(token['issuer'], token['name'])
+            >>> print(token.issuer, token.name)
             someguy123 SomeToken
         
 
         :param str symbol: Symbol of the token to lookup, such as 'ENG'
-        :return dict token_data: A dictionary containing data about the token (see below)
+        :return Token token_data: An object containing data about the token (see below)
         
-        Formatted like below:
+        A :class:`.Token` object can be accessed either via attributes ``token.issuer`` or as a dict.
+
+        They contain the fields below:
         
         .. code-block:: js
 
@@ -282,11 +288,12 @@ class SteemEngineToken:
         :return None: If token not found, ``None`` is returned.
         """
         log.debug('Getting token object for symbol %s', symbol)
-        return self.rpc.findone(
+        tk = self.rpc.findone(
             contract='tokens',
             table='tokens',
             query=dict(symbol=symbol.upper())
         )
+        return None if empty(tk) else Token(**tk)
 
     def send_token(self, symbol, from_acc, to_acc, amount: Decimal, memo="", find_tx=True) -> dict:
         """

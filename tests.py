@@ -40,7 +40,7 @@ class TokenTest(unittest.TestCase):
     
     def test_get_all_balances(self):
         """Get all balances for user TEST_ACC, and verify that REAL_TOKEN is in there"""
-        res = st.get_balances(TEST_ACC)
+        res = list(st.get_balances(TEST_ACC))
         self.assertIs(type(res), list)
         self.assertGreater(len(res), 0)
         syms = [t['symbol'].upper() for t in res]

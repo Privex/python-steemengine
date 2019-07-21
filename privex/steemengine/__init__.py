@@ -2,6 +2,7 @@ import logging
 import sys
 from privex.steemengine.SteemEngineToken import SteemEngineToken
 from privex.steemengine.SteemEngineHistory import SteemEngineHistory
+from privex.steemengine.objects import Token, TokenMetadata, SEBalance, SETransaction, ObjBase
 
 name = 'steemengine'
 
