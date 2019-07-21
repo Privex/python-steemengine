@@ -3,6 +3,7 @@
 __pycache__
 .idea
 .vscode
+.pytest_cache
 
 # PyPi build files
 build

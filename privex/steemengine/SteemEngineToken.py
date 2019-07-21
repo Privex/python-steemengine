@@ -1,8 +1,6 @@
 import logging
 from decimal import Decimal, ROUND_DOWN, getcontext
-
-from beem.blockchain import Blockchain
-from beem.instance import shared_steem_instance
+from typing import Union
 from privex.jsonrpc import SteemEngineRPC
 from privex.steemengine import exceptions
 from privex.steemengine.SteemEngineHistory import SteemEngineHistory
@@ -39,7 +37,14 @@ class SteemEngineToken:
 
     """
 
-    steem = shared_steem_instance()
+    _steem = None
+
+    @property
+    def steem(self):
+        if not self._steem:
+            from beem.instance import shared_steem_instance
+            self._steem = shared_steem_instance()
+        return self._steem
 
     def __init__(self, network_account='ssc-mainnet1', history_conf: dict = None, **rpc_args):
         """
@@ -58,6 +63,23 @@ class SteemEngineToken:
         history_conf = {} if history_conf is None else history_conf
         self.history_rpc = SteemEngineHistory(**history_conf)
         log.debug('Initialized SteemEngineToken with args: %s %s %s', network_account, history_conf, rpc_args)
+
+    @staticmethod
+    def custom_beem(node: Union[str, list] = "", *args, **kwargs):
+        """
+        Override the beem Steem instance (_steem) used by this class.
+
+        Useful if you'd rather not configure beem's shared instance for some reason.
+
+        Example usage:
+
+        >>> from privex.steemengine import SteemEngineToken
+        >>> SteemEngineToken.custom_beem(node=['https://steemd.privex.io', 'https://api.steemit.com'])
+
+        """
+        from beem.steem import Steem
+        SteemEngineToken._steem = Steem(node, *args, **kwargs)
+        return SteemEngineToken._steem
 
     def get_balances(self, user) -> list:
         """
@@ -122,6 +144,7 @@ class SteemEngineToken:
                                     expiration, operations, extensions, signatures, block_num, transaction_num}
         :return None:             If the transaction wasn't found, None will be returned.
         """
+        from beem.blockchain import Blockchain
         # Code taken/based from @holgern/beem blockchain.py
         chain = Blockchain(steem_instance=self.steem, mode='head')
         current_num = chain.get_current_block_num()
