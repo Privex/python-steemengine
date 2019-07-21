@@ -1,9 +1,10 @@
 import logging
 from decimal import Decimal, ROUND_DOWN, getcontext
-from typing import Union
+from typing import Union, List
 from privex.jsonrpc import SteemEngineRPC
 from privex.steemengine import exceptions
 from privex.steemengine.SteemEngineHistory import SteemEngineHistory
+from privex.helpers import empty
 
 log = logging.getLogger(__name__)
 getcontext().rounding = ROUND_DOWN
@@ -11,7 +12,7 @@ getcontext().rounding = ROUND_DOWN
 
 class SteemEngineToken:
     """
-    SteemEngineToken - a wrapper class around privex.jsonrpc.SteemEngineRPC, with support
+    SteemEngineToken - a wrapper class around :py:class:`privex.jsonrpc.SteemEngineRPC`, with support
     for signing transactions, including issuing/sending tokens.
     
     Copyright::
@@ -40,10 +41,21 @@ class SteemEngineToken:
 
     """
 
-    _steem = None
+    _steem = None   # type: beem.steem.Steem
+    """Static attribute to be initialised by :py:meth:`.steem` to hold :class:`beem.steem.Steem`"""
 
     @property
     def steem(self):
+        """
+        When a method calls ``self.steem`` , this property will first try to return :py:attr:`._steem`
+        if it was previously called. Otherwise, it will automatically initialise :py:attr:`._steem`
+        with an instance of :class:`beem.steem.Steem` and then return it.
+        
+        This ensures that Beem isn't initialised unless it's actually needed, preventing un-necessary
+        slowdowns of the application using this library due to Beem attempting to find a working RPC node.
+
+        :return beem.steem.Steem steem: An instance of :class:`beem.steem.Steem`
+        """
         if not self._steem:
             from beem.instance import shared_steem_instance
             self._steem = shared_steem_instance()
@@ -53,13 +65,13 @@ class SteemEngineToken:
         """
         Initialises the class with various configuration options. All parameters are optional.
 
-        Pass a dict in `history_conf` to override the SteemEngine history node used
-        Pass extra kwargs such as hostname='api.example.com' ot override the SteemEngine RPC node used.
+        Pass a dict in ``history_conf`` to override the SteemEngine history node used
+        Pass extra kwargs such as ``hostname='api.example.com'`` ot override the SteemEngine RPC node used.
 
         :param network_account: The Steem account that operates the SteemEngine network, e.g. ssc-mainnet1 for the
                                 Steem Smart Contracts Main Network
-        :param history_conf:    A dictionary containing kwargs to pass to :class:`SteemEngineHistory` constructor
-        :param rpc_args:        Any additional kwargs will be passed to the :class:`SteemEngineRPC` constructor
+        :param history_conf:    A dictionary containing kwargs to pass to :py:class:`.SteemEngineHistory` constructor
+        :param rpc_args:        Any additional kwargs will be passed to the :py:class:`privex.jsonrpc.SteemEngineRPC` constructor
         """
         self.rpc = SteemEngineRPC(**rpc_args)
         self.network_account = network_account
@@ -70,7 +82,7 @@ class SteemEngineToken:
     @staticmethod
     def custom_beem(node: Union[str, list] = "", *args, **kwargs):
         """
-        Override the beem Steem instance (_steem) used by this class.
+        Override the beem Steem instance (:py:attr:`._steem`) used by this class.
 
         Useful if you'd rather not configure beem's shared instance for some reason.
 
@@ -84,11 +96,21 @@ class SteemEngineToken:
         SteemEngineToken._steem = Steem(node, *args, **kwargs)
         return SteemEngineToken._steem
 
-    def get_balances(self, user) -> list:
+    def get_balances(self, user) -> List[dict]:
         """
-        Get all token balances for a user
+        Get all token balances for a user.
+
+        **Example:**
+
+            >>> balances = SteemEngineToken().get_balances('someguy123')
+            >>> for bal in balances:
+            ...     print(f"{bal['symbol']} balance is: {bal['balance']}")
+            ENG balance is: 12.345
+            SGTK balance is: 51235
+            STEEMP balance is: 102.437
+
         :param user: Username to find all token balances for
-        :return: list<dict> of balances [{account:str, symbol:str, balance:str}...]
+        :return list<dict> balances: All balances of a user [{account:str, symbol:str, balance:str}...]
         """
         log.debug('Finding all token balances for user %s', user)
         return self.rpc.find(
@@ -99,10 +121,17 @@ class SteemEngineToken:
 
     def get_token_balance(self, user, symbol) -> Decimal:
         """
-        Find a specific token balance of a user
-        :param user: Username to find given `symbol` balance for
-        :param symbol: Symbol of the token to lookup, such as 'ENG'
-        :return Decimal: The user's balance. Decimal(0) if their balance is empty, or they don't have the token.
+        Find a specific token balance of a user.
+
+        **Example:**
+
+            >>> SteemEngineToken().get_token_balance('someguy123', 'ENG')
+            Decimal(12.345)
+
+
+        :param str user: Username to find given ``symbol`` balance for
+        :param str symbol: Symbol of the token to lookup, such as 'ENG'
+        :return Decimal balance: The user's balance. ``Decimal(0)`` if their balance is empty, or they don't have the token.
         """
         balances = self.get_balances(user)
         for bal in balances:
@@ -115,20 +144,51 @@ class SteemEngineToken:
     def account_exists(self, user) -> bool:
         """
         Helper function to verify if a given user exists on Steem.
-        :param user: Steem username to lookup
-        :return bool: True if the user exists, False if they don't
+
+        **Example:**
+
+            >>> st = SteemEngineToken()
+            >>> if st.account_exists('someguy123'):
+            ...     print('someguy123 exists')
+            someguy123 exists
+        
+
+        :param str user: Steem username to lookup
+        :return bool exists: True if the user exists, False if they don't
         """
         log.debug('Checking if user %s exists', user)
         return len(self.steem.rpc.get_account(user)) > 0
 
-    def list_tokens(self, limit=1000, offset=0) -> list:
+    def list_tokens(self, limit=1000, offset=0) -> List[dict]:
         """
-        Returns a list of all tokens
+        Returns a list of all tokens.
+
+        **Example:**
+
+            >>> for t in SteemEngineToken().list_tokens():
+            ...     print(f"Token {t['symbol']} has a max supply of {t['maxSupply']} and issued by {t['issuer']}")
+            Token ENG has a max supply of 9007199254740991 and issued by null
+            Token STEEMP has a max supply of 1000000000000 and issued by steem-peg
+            Token BTCP has a max supply of 1000000000000 and issued by btcpeg
+            Token LTCP has a max supply of 1000000000000 and issued by ltcp
+
         :param limit: Amount of token objects to retrieve
         :param offset: Amount of token objects to skip (for pagination)
-        :return: list<dict> of tokens, each list item formatted like this:
-                    {issuer:str, symbol:str, name:str, metadata:str, precision:int, maxSupply: int, supply: int,
-                     circulatingSupply:int}
+        :return list<dict> tokens: Each list item formatted like this:
+
+        .. code-block:: js
+
+            {
+                issuer:str, 
+                symbol:str,
+                name:str,
+                metadata:str,
+                precision:int,
+                maxSupply: int,
+                supply: int,
+                circulatingSupply:int
+            }
+        
         """
         return self.rpc.find(
             contract='tokens',
@@ -137,15 +197,26 @@ class SteemEngineToken:
             limit=limit, offset=offset
         )
 
-    def find_steem_tx(self, tx_data, last_blocks=15):
+    def find_steem_tx(self, tx_data: dict, last_blocks=15) -> dict:
         """
-        Used internally to get the transaction ID after a transaction has been broadcasted
+        Used internally to get the transaction ID after a Steem transaction has been broadcasted.
 
-        :param dict tx_data:      Transaction data returned by a beem broadcast operation, must include 'signatures'
+        See :py:meth:`.send_token` and :py:meth:`.issue_token` for how this is used.
+
+        :param dict tx_data:      Transaction data returned by a beem broadcast operation, must include ``signatures``
         :param int last_blocks:   Amount of previous blocks to search for the transaction
-        :return dict:             Transaction data from the blockchain {transaction_id, ref_block_num, ref_block_prefix,
-                                    expiration, operations, extensions, signatures, block_num, transaction_num}
-        :return None:             If the transaction wasn't found, None will be returned.
+        :return dict:             Transaction data from the blockchain, see below.
+        
+        **Return format:**
+
+        .. code-block:: js
+
+            {
+                transaction_id, ref_block_num, ref_block_prefix, expiration,
+                operations, extensions, signatures, block_num, transaction_num
+            }
+        
+        :return None:             If the transaction wasn't found, ``None`` will be returned.
         """
         from beem.blockchain import Blockchain
         # Code taken/based from @holgern/beem blockchain.py
@@ -157,26 +228,58 @@ class SteemEngineToken:
                     return tx
         return None
 
-    def list_transactions(self, user, symbol=None, limit=100, offset=0) -> list:
+    def list_transactions(self, user, symbol=None, limit=100, offset=0) -> List[dict]:
         """
         Get the Steem Engine transaction history for a given account
-        :param user: Account name to filter by
-        :param symbol: Symbol to filter by, e.g. ENG (optional)
-        :param limit: Return this many transactions
-        :param offset: Skip this many transactions (for pagination)
-        :return: list of dict(block, txid, timestamp, symbol, from, from_type, to, to_type, memo, quantity)
+
+        **Example:**
+
+            >>> for tx in SteemEngineToken().list_transactions('someguy123'):
+            ...     print(tx['timestamp'], tx['from'], 'sent', tx['quantity'], tx['symbol'], 'to', tx['to'])
+            2019-07-04T06:18:09.000Z market sent 100 SGTK to someguy123
+            2019-07-04T01:01:15.000Z minnowsupport sent 0.924 PAL to someguy123
+            2019-07-03T17:10:36.000Z someguy123 sent 1 BTSP to btsp
+        
+        :param str user: Account name to filter by
+        :param str symbol: Symbol to filter by, e.g. ENG (optional)
+        :param int limit: Return this many transactions (optional)
+        :param int offset: Skip this many transactions (for pagination) (optional)
+        :return List<dict> txs: A list of ``dict(block, txid, timestamp, symbol, from, from_type, to, to_type, memo, quantity)``
         """
-        symbol = symbol.upper()
+        symbol = None if empty(symbol) else symbol.upper()
         log.debug('Getting TX history for user %s, symbol %s, limit %s, offset %s', user, symbol, limit, offset)
         return self.history_rpc.get_history(account=user, symbol=symbol, limit=limit, offset=offset)
 
     def get_token(self, symbol) -> dict:
         """
-        Get the token object for an individual token
-        :param symbol: Symbol of the token to lookup, such as 'ENG'
-        :return dict: Token data     {issuer:str, symbol:str, name:str, metadata:str, precision:int,
-                                      maxSupply: int, supply: int, circulatingSupply:int}
-        :return None: If token not found, None is returned.
+        Get the token object for an individual token.
+
+        **Example:**
+
+            >>> token = SteemEngineToken().get_token('SGTK'):
+            >>> print(token['issuer'], token['name'])
+            someguy123 SomeToken
+        
+
+        :param str symbol: Symbol of the token to lookup, such as 'ENG'
+        :return dict token_data: A dictionary containing data about the token (see below)
+        
+        Formatted like below:
+        
+        .. code-block:: js
+
+            {
+                issuer:str,
+                symbol:str,
+                name:str,
+                metadata:str,
+                precision:int,
+                maxSupply: int,
+                supply: int,
+                circulatingSupply:int
+            }
+        
+        :return None: If token not found, ``None`` is returned.
         """
         log.debug('Getting token object for symbol %s', symbol)
         return self.rpc.findone(
@@ -187,8 +290,8 @@ class SteemEngineToken:
 
     def send_token(self, symbol, from_acc, to_acc, amount: Decimal, memo="", find_tx=True) -> dict:
         """
-        Sends a given `amount` of `symbol` from `from_acc` to `to_acc` with the memo `memo`.
-        You must have the active key for `from_acc` in your Beem wallet.
+        Sends a given ``amount`` of ``symbol`` from ``from_acc`` to ``to_acc`` with the memo ``memo``.
+        You must have the active key for ``from_acc`` in your Beem wallet.
 
             >>> SteemEngineToken().send_token('SGTK', 'someguy123', 'privex', Decimal('1.234'), 'my memo')
 
@@ -199,17 +302,40 @@ class SteemEngineToken:
         :param memo:           The memo to send with. If not specified, will sent with blank memo
         :param find_tx:        If you don't care about info such as the TXID, and what block it's in, set to False.
         :raises ArithmeticError:  When the amount is lower than the lowest amount allowed by the token's precision
-        :raises NotEnoughBalance: When `from_acc` does not have enough token balance to send this `amount`
-        :raises AccountNotFound:  When either the `from_acc` or `to_acc` does not exist
+        :raises NotEnoughBalance: When ``from_acc`` does not have enough token balance to send this `amount`
+        :raises AccountNotFound:  When either the ``from_acc`` or ``to_acc`` does not exist
         :raises TokenNotFound:    When the requested token `symbol` does not exist
-        :raises beem.exceptions.MissingKeyError: No active key found for the `from_acc` in beem wallet
+        :raises beem.exceptions.MissingKeyError: No active key found for the ``from_acc`` in beem wallet
 
-        :return dict: If TX was found on chain, more in-depth data including TXID
-                      {transaction_id, ref_block_num, ref_block_prefix, expiration, operations, extensions, signatures,
-                       block_num, transaction_num}
+        :return dict: If TX was found on chain, more in-depth data including TXID, see below
+
+        .. code-block:: js
+
+            {
+                transaction_id,
+                ref_block_num,
+                ref_block_prefix,
+                expiration,
+                operations,
+                extensions,
+                signatures,
+                block_num,
+                transaction_num
+            }
 
         :return dict: If TX not found on chain, returns broadcast info:
-                      {expiration, ref_block_num, ref_block_prefix, operations, extensions, signatures}
+
+        .. code-block:: js
+
+            {
+                expiration,
+                ref_block_num,
+                ref_block_prefix,
+                operations,
+                extensions,
+                signatures
+            }
+        
         """
         t = self.get_token(symbol)
         if t is None:
@@ -253,9 +379,15 @@ class SteemEngineToken:
 
     def issue_token(self, symbol: str, to: str, amount: Decimal, find_tx=True) -> dict:
         """
-        Issues a specified amount `amount` of `symbol` to the Steem account `to`
-        Automatically queries Steem Engine API to find issuer of the token, and broadcast using Beem
+        Issues a specified amount ``amount`` of ``symbol`` to the Steem account ``to``.
+
+        Automatically queries Steem Engine API to find issuer of the token, and broadcast using Beem.
+
         You must have the active key of the token issuer account in your Beem wallet.
+
+        **Example:** Issue ``1.234 SGTK`` to ``privex`` (automatically looks up the issuer and uses that account)
+
+            >>> SteemEngineToken().issue_token('SGTK', 'privex', Decimal('1.234'))
 
         :param symbol:   The symbol of the token to issue, e.g. ENG
         :param to:       The Steem username to issue the tokens to
@@ -263,15 +395,38 @@ class SteemEngineToken:
         :param find_tx:  If you don't care about info such as the TXID, and what block it's in, set to False.
         :raises ArithmeticError:  When the amount is lower than the lowest amount allowed by the token's precision
         :raises TokenNotFound: When a token does not exist
-        :raises AccountNotFound: When the `to` account doesn't exist on Steem
+        :raises AccountNotFound: When the ``to`` account doesn't exist on Steem
         :raises beem.exceptions.MissingKeyError: No active key found for the issuer in beem wallet
 
-        :return dict: If TX was found on chain, more in-depth data including TXID
-                      {transaction_id, ref_block_num, ref_block_prefix, expiration, operations, extensions, signatures,
-                       block_num, transaction_num}
+        :return dict: If TX was found on chain, more in-depth data including TXID, see below
+
+        .. code-block:: js
+
+            {
+                transaction_id,
+                ref_block_num,
+                ref_block_prefix,
+                expiration,
+                operations,
+                extensions,
+                signatures,
+                block_num,
+                transaction_num
+            }
 
         :return dict: If TX not found on chain, returns broadcast info:
-                      {expiration, ref_block_num, ref_block_prefix, operations, extensions, signatures}
+
+        .. code-block:: js
+
+            {
+                expiration,
+                ref_block_num,
+                ref_block_prefix,
+                operations,
+                extensions,
+                signatures
+            }
+        
         """
         t = self.get_token(symbol)
         amount = Decimal(amount)

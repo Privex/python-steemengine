@@ -1,4 +1,4 @@
-privex.steemengine.exceptions
+Exceptions
 =============================
 
 .. automodule:: privex.steemengine.exceptions

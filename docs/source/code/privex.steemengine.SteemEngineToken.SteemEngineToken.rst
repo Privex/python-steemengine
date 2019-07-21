@@ -33,7 +33,9 @@ SteemEngineToken
    .. rubric:: Attributes
 
    .. autosummary::
+      :toctree: stubs
    
       ~SteemEngineToken.steem
+      ~SteemEngineToken._steem
    
    

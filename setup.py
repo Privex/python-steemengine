@@ -42,7 +42,7 @@ with open("README.md", "r") as fh:
 setup(
     name='privex_steemengine',
 
-    version='1.0.5',
+    version='1.0.6',
 
     description='A small library for querying and interacting with the SteemEngine network (https://steem-engine.com)',
     long_description=long_description,
@@ -56,6 +56,7 @@ setup(
         'privex-jsonrpc>=1.0.0',
         'beem>=0.20.9',
         'requests>=2.20.1',
+        'privex-helpers>=1.1.0'
     ],
     packages=find_packages(),
     classifiers=[

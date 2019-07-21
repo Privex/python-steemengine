@@ -1,4 +1,4 @@
-privex.steemengine.exceptions.TokenNotFound
+exceptions.TokenNotFound
 ===========================================
 
 .. currentmodule:: privex.steemengine.exceptions

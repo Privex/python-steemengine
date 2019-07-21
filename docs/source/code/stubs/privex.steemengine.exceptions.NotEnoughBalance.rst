@@ -1,4 +1,4 @@
-privex.steemengine.exceptions.NotEnoughBalance
+exceptions.NotEnoughBalance
 ==============================================
 
 .. currentmodule:: privex.steemengine.exceptions

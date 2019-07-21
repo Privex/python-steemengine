@@ -1,4 +1,4 @@
-privex.steemengine.exceptions.AccountNotFound
+exceptions.AccountNotFound
 =============================================
 
 .. currentmodule:: privex.steemengine.exceptions
