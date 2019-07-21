@@ -38,6 +38,7 @@ Python SteemEngine - A small library for querying and interacting with the Steem
 Copyright (c) 2019    Privex Inc. ( https://www.privex.io )
 ```
 
+
 # Quick Install / Usage
 
 ```bash
@@ -76,6 +77,35 @@ a method's brackets (including the constructor brackets) to see the parameters y
 
 Alternatively, just view the files inside of `privex/steemengine/` - most methods and constructors
 are adequately commented with PyDoc.
+
+# Documentation
+
+[![Read the Documentation](https://read-the-docs-guidelines.readthedocs-hosted.com/_images/logo-wordmark-dark.png)](
+https://python-steemengine.readthedocs.io/en/latest/)
+
+Full documentation for this project is available above (click the Read The Docs image), including:
+
+ - How to install the application and it's dependencies 
+ - How to use the various functions and classes
+ - General documentation of the modules and classes for contributors
+
+**To build the documentation:**
+
+```bash
+git clone https://github.com/Privex/python-steemengine
+cd python-steemengine/docs
+pip3 install -r requirements.txt
+
+# It's recommended to run make clean to ensure old HTML files are removed
+# `make html` generates the .html and static files in docs/build for production
+make clean && make html
+
+# After the files are built, you can live develop the docs using `make live`
+# then browse to http://127.0.0.1:8100/
+# If you have issues with content not showing up correctly, try make clean && make html
+# then run make live again.
+make live
+```
 
 # Signing Transactions
 
