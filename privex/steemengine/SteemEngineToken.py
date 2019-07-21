@@ -14,6 +14,8 @@ class SteemEngineToken:
     SteemEngineToken - a wrapper class around privex.jsonrpc.SteemEngineRPC, with support
     for signing transactions, including issuing/sending tokens.
     
+    Copyright::
+
         +===================================================+
         |                 © 2019 Privex Inc.                |
         |               https://www.privex.io               |
@@ -28,7 +30,8 @@ class SteemEngineToken:
         |                                                   |
         +===================================================+
 
-    Basic usage:
+
+    **Basic usage**:
 
         >>> from privex.steemengine import SteemEngineToken
         >>> s = SteemEngineToken()

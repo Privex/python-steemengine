@@ -5,6 +5,7 @@ Unit tests for Privex's SteemEngine library.
 To run them, either just run tests.py directly, or use pytest
 
 .. code-block:: bash
+
     ./tests.py
     # Verbose mode
     ./tests.py

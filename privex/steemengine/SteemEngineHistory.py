@@ -3,19 +3,22 @@ import logging
 import requests
 
 """
-+===================================================+
-|                 © 2019 Privex Inc.                |
-|               https://www.privex.io               |
-+===================================================+
-|                                                   |
-|        Python Steem Engine library                |
-|        License: X11/MIT                           |
-|                                                   |
-|        Core Developer(s):                         |
-|                                                   |
-|          (+)  Chris (@someguy123) [Privex]        |
-|                                                   |
-+===================================================+
+Copyright::
+
+    +===================================================+
+    |                 © 2019 Privex Inc.                |
+    |               https://www.privex.io               |
+    +===================================================+
+    |                                                   |
+    |        Python Steem Engine library                |
+    |        License: X11/MIT                           |
+    |                                                   |
+    |        Core Developer(s):                         |
+    |                                                   |
+    |          (+)  Chris (@someguy123) [Privex]        |
+    |                                                   |
+    +===================================================+
+
 
 Python SteemEngine - A small library for querying and interacting with the SteemEngine network (https://steem-engine.com)
 Copyright (c) 2019    Privex Inc. ( https://www.privex.io )
@@ -44,6 +47,8 @@ class SteemEngineHistory:
     """
     Provides simple methods for querying a SteemEngine history node
 
+    Copyright::
+
         +===================================================+
         |                 © 2019 Privex Inc.                |
         |               https://www.privex.io               |
@@ -57,6 +62,7 @@ class SteemEngineHistory:
         |          (+)  Chris (@someguy123) [Privex]        |
         |                                                   |
         +===================================================+
+
 
     Basic Usage:
 
