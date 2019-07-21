@@ -1,6 +1,6 @@
 .. _Privex Python Helpers documentation:
 
-Privex Python Helpers's documentation
+Privex's Python Steem-Engine Library
 =================================================
 
 .. image:: https://www.privex.io/static/assets/svg/brand_text_nofont.svg
