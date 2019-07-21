@@ -17,7 +17,7 @@ loading the transaction history for any account.
 This documentation is automatically kept up to date by ReadTheDocs, as it is automatically re-built each time
 a new commit is pushed to the `Github Project`_ 
 
-.. Privex's Steem-Engine library: https://github.com/Privex/python-steemengine
+.. _Privex's Steem-Engine library: https://github.com/Privex/python-steemengine
 .. _Github Project: https://github.com/Privex/python-steemengine
 .. _Steem-Engine: https://www.steem-engine.com
 
