@@ -1,5 +1,7 @@
 # Python SteemEngine
 
+[![Build Status](https://travis-ci.com/Privex/python-steemengine.svg?branch=master)](https://travis-ci.com/Privex/python-steemengine)
+
 A small library for querying and interfacing with the [SteemEngine](https://steem-engine.com) network, including
 sending and issuing tokens.
 
@@ -192,6 +194,27 @@ lh.add_file_handler('test.log')        # Log messages to the file `test.log` in 
 lh.copy_logger('privex.steemengine')   # Easily copy your logging settings to any other module loggers
 log = lh.get_logger()                  # Grab your app's logging instance, or use logging.getLogger('myapp')
 log.error('Hello World')
+```
+
+# Unit Tests
+
+Unit tests are available in `tests.py`. We also have the project set up with [Travis CI](https://travis-ci.com/Privex/python-steemengine)
+to alert us when new releases cause the tests to break.
+
+To run the tests manually, either simply run `tests.py` directly (or with python3), or use pytest:
+
+```sh
+git clone https://github.com/Privex/python-steemengine
+pip3 install .
+./tests.py
+# Verbose mode (shows the name of the test, and the comment under it)
+./tests.py -v
+
+# You can also use pytest - which is used by our Travis CI setup.
+pip3 install pytest
+pytest tests.py
+# Verbose mode
+pytest tests.py
 ```
 
 # Contributing
