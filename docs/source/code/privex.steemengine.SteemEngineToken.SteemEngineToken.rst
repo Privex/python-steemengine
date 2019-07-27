@@ -19,11 +19,13 @@ SteemEngineToken
       ~SteemEngineToken.custom_beem
       ~SteemEngineToken.find_steem_tx
       ~SteemEngineToken.get_balances
+      ~SteemEngineToken.get_orderbook
       ~SteemEngineToken.get_token
       ~SteemEngineToken.get_token_balance
       ~SteemEngineToken.issue_token
       ~SteemEngineToken.list_tokens
       ~SteemEngineToken.list_transactions
+      ~SteemEngineToken.order_history
       ~SteemEngineToken.send_token
    
    

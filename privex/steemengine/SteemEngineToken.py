@@ -4,7 +4,7 @@ from typing import Union, List
 from privex.jsonrpc import SteemEngineRPC
 from privex.steemengine import exceptions
 from privex.steemengine.SteemEngineHistory import SteemEngineHistory
-from privex.steemengine.objects import SEBalance, SETransaction, Token
+from privex.steemengine.objects import SEBalance, SETransaction, Token, SETrade, SEOrder
 from privex.helpers import empty
 
 log = logging.getLogger(__name__)
@@ -195,6 +195,73 @@ class SteemEngineToken:
             contract='tokens',
             table='tokens',
             query={},
+            limit=limit, offset=offset
+        )))
+
+    def order_history(self, symbol, limit=30, offset=0, indexes: List[dict] = None) -> List[SETrade]:
+        """
+        Get a list of recent Steem Engine orders for a given symbol.
+
+        **Example:**
+
+            >>> o = SteemEngineToken().order_history('ENG')
+            >>> o[0]
+            <SETrade type='buy' price='0.99' symbol='ENG' quantity='0.80405854'>
+            >>> o[0].timestamp
+            '2019-07-27 01:06:09'
+
+        :param str symbol: The symbol to get historic orders for
+        :param int limit: Amount of orders to retrieve
+        :param int offset: Offset selection by this many rows (for pagination)
+        :param list indexes: A list of dictionary indexes, e.g. ``[dict(descending=False, index='timestamp')]``
+        :return List[SETrade] orders: A list of :py:class:`.SETrade` objects
+        """
+        indexes = [dict(descending=False, index='timestamp')] if empty(indexes) else indexes
+        return list(SETrade.from_list(self.rpc.find(
+            contract='market',
+            table='tradesHistory',
+            query=dict(symbol=symbol),
+            indexes=indexes,
+            limit=limit, offset=offset
+        )))
+    
+    def get_orderbook(self, symbol, direction='buy', user=None, limit=200, offset=0,
+                      indexes: list = None) -> List[SEOrder]:
+        """
+        Get a list of open Steem Engine orders for a given symbol, by default will display ``'buy'`` orders unless
+        you set ``direction`` to ``'sell'``
+
+        **Example:**
+
+            >>> o = SteemEngineToken().get_orderbook('ENG', direction='sell')
+            >>> o[0]
+            <SEOrder account='someguy123' price='0.99' symbol='ENG' quantity='885.40249121'>
+            >>> str(o[0].timestamp)
+            '2019-07-26 10:46:18'
+
+
+        :param str symbol: The symbol to get the open orders for
+        :param int limit: Amount of orders to retrieve
+        :param int offset: Offset selection by this many rows (for pagination)
+        :param list indexes: A list of dictionary indexes, e.g. ``[dict(descending=False, index='timestamp')]``
+        :param str user: If ``None`` , get all orders, otherwise only get orders by this user. Default: ``None``
+        :param str direction: The direction of orders to get, either ``buy`` or ``sell`` Default: ``buy``
+        :return List[SEOrder] orders: A list of :py:class:`.SEOrder` objects
+        """
+        direction = direction.lower()
+        if direction not in ['buy', 'sell']:
+            raise AttributeError('get_orderbook direction must be either "buy" or "sell"')
+
+        indexes = [dict(descending=direction == 'sell', index='price')] if empty(indexes) else indexes
+
+        q = dict(symbol=symbol)
+        if not empty(user):
+            q['account'] = user
+        return list(SEOrder.from_list(self.rpc.find(
+            contract='market',
+            table=f'{direction.lower()}Book',
+            query=q,
+            indexes=indexes,
             limit=limit, offset=offset
         )))
 

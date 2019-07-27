@@ -17,6 +17,8 @@ Data Objects (Token/SEBalance etc.)
       ObjBase
       SEBalance
       SETransaction
+      SETrade
+      SEOrder
       Token
       TokenMetadata
    
