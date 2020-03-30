@@ -90,6 +90,7 @@ class SteemEngineToken:
         if network == "hive":
             rpc_args['hostname'] = rpc_args.get('hostname', 'api.hive-engine.com')
             rpc_args['url'] = rpc_args.get('url', '/rpc/contracts')
+            network_account = 'ssc-mainnet-hive'
             history_conf['hostname'] = history_conf.get('hostname', 'accounts.hive-engine.com')
             history_conf['url'] = history_conf.get('url', 'accountHistory')
 
