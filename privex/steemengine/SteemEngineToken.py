@@ -1,6 +1,6 @@
 import logging
 from decimal import Decimal, ROUND_DOWN, getcontext
-from typing import Union, List
+from typing import Union, List, Dict
 from privex.jsonrpc import SteemEngineRPC
 from privex.steemengine import exceptions
 from privex.steemengine.SteemEngineHistory import SteemEngineHistory
@@ -45,6 +45,12 @@ class SteemEngineToken:
     _steem = None   # type: beem.steem.Steem
     """Static attribute to be initialised by :py:meth:`.steem` to hold :class:`beem.steem.Steem`"""
 
+    _steem_ins: Dict[str, "beem.steem.Steem"] = {
+        "steem": None, "hive": None
+    }
+
+    network: str
+
     @property
     def steem(self):
         """
@@ -57,12 +63,16 @@ class SteemEngineToken:
 
         :return beem.steem.Steem steem: An instance of :class:`beem.steem.Steem`
         """
-        if not self._steem:
-            from beem.instance import shared_steem_instance
-            self._steem = shared_steem_instance()
-        return self._steem
+        
+        if not self._steem_ins[self.network]:
+            if self.network == "hive":
+                self._steem_ins[self.network] = self.custom_beem(["https://hived.privex.io", "https://anyx.io"])
+            else:
+                from beem.instance import shared_steem_instance
+                self._steem_ins[self.network] = shared_steem_instance()
+        return self._steem_ins[self.network]
 
-    def __init__(self, network_account='ssc-mainnet1', history_conf: dict = None, **rpc_args):
+    def __init__(self, network_account='ssc-mainnet1', history_conf: dict = None, network="steem", **rpc_args):
         """
         Initialises the class with various configuration options. All parameters are optional.
 
@@ -74,9 +84,17 @@ class SteemEngineToken:
         :param history_conf:    A dictionary containing kwargs to pass to :py:class:`.SteemEngineHistory` constructor
         :param rpc_args:        Any additional kwargs will be passed to the :py:class:`privex.jsonrpc.SteemEngineRPC` constructor
         """
+        rpc_args = dict(rpc_args)
+        history_conf = {} if history_conf is None else history_conf
+        self.network = network
+        if network == "hive":
+            rpc_args['hostname'] = rpc_args.get('hostname', 'api.hive-engine.com')
+            rpc_args['url'] = rpc_args.get('url', '/rpc/contracts')
+            history_conf['hostname'] = history_conf.get('hostname', 'accounts.hive-engine.com')
+            history_conf['url'] = history_conf.get('url', 'accountHistory')
+
         self.rpc = SteemEngineRPC(**rpc_args)
         self.network_account = network_account
-        history_conf = {} if history_conf is None else history_conf
         self.history_rpc = SteemEngineHistory(**history_conf)
         log.debug('Initialized SteemEngineToken with args: %s %s %s', network_account, history_conf, rpc_args)
 
