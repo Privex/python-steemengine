@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 +===================================================+
-|                 © 2019 Privex Inc.                |
+|                 © 2020 Privex Inc.                |
 |               https://www.privex.io               |
 +===================================================+
 |                                                   |
@@ -15,7 +15,7 @@
 +===================================================+
 
 Python SteemEngine - A small library for querying and interacting with the SteemEngine network (https://steem-engine.com)
-Copyright (c) 2019    Privex Inc. ( https://www.privex.io )
+Copyright (c) 2020    Privex Inc. ( https://www.privex.io )
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation 
 files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, 
@@ -42,7 +42,7 @@ with open("README.md", "r") as fh:
 setup(
     name='privex_steemengine',
 
-    version='1.2.1',
+    version='2.0.0',
 
     description='A small library for querying and interacting with the SteemEngine network (https://steem-engine.com)',
     long_description=long_description,
@@ -54,9 +54,9 @@ setup(
     license='MIT',
     install_requires=[
         'privex-jsonrpc>=1.0.0',
-        'beem>=0.22.11',
+        'beem>=0.24.0',
         'requests>=2.20.1',
-        'privex-helpers>=1.1.0'
+        'privex-helpers>=2.13.0'
     ],
     packages=find_packages(),
     classifiers=[

@@ -20,15 +20,36 @@ To run them, either just run tests.py directly, or use pytest
 """
 import unittest
 from decimal import Decimal
+
+from privex.helpers import DictObject
+
 from privex.steemengine import SteemEngineToken, SteemEngineHistory
 
-SteemEngineToken.custom_beem(node=['https://steemd.privex.io', 'https://api.steemit.com'])
+SteemEngineToken.custom_beem(node=['https://api.steemit.com'])
 
 st = SteemEngineToken()
 FAKE_TOKEN = 'NONEXISTANTTOKEN'
 REAL_TOKEN = 'SGTK'
+ACTIVE_TOKENS = DictObject(steem='ENG', hive='BEE')
 TEST_ACC = 'someguy123'
-FAKE_ACC = 'non-existant-account999'
+FAKE_ACC = 'non-existent-account999'
+
+
+class SEBase(unittest.TestCase):
+    s_nodes = ['https://api.steemit.com']
+    s_kwargs = dict(network='steem')
+    
+    @classmethod
+    def setUpClass(cls) -> None:
+        SteemEngineToken.custom_beem()
+        cls.stoken = SteemEngineToken()
+
+
+class SteemBaseTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        SteemEngineToken.custom_beem(node=['https://api.steemit.com'])
+
 
 class TokenTest(unittest.TestCase):
 
@@ -67,8 +88,12 @@ class TokenTest(unittest.TestCase):
     def test_account_no_exists(self):
         """Test account_exists returns false for non-existant FAKE_ACC"""
         self.assertFalse(st.account_exists(FAKE_ACC))
-        
-    
+
+
+class MarketTest(unittest.TestCase):
+    def test_order_history_steem(self):
+        pass
+
 
 class HistoryTest(unittest.TestCase):
     def test_history(self):

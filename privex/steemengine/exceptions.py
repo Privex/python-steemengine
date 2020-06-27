@@ -37,17 +37,26 @@ otherwise to promote the sale, use or other dealings in this Software without pr
 """
 
 
-class TokenNotFound(BaseException):
+class SteemEngineException(Exception):
+    """Base exception for all :mod:`privex.steemengine` exceptions"""
+
+
+class TokenNotFound(SteemEngineException):
     """The token requested doesn't exist"""
-    pass
 
 
-class AccountNotFound(BaseException):
+class AccountNotFound(SteemEngineException):
     """The Steem account requested doesn't exist"""
-    pass
 
 
-class NotEnoughBalance(BaseException):
+class NotEnoughBalance(SteemEngineException):
     """Not enough token/steem/sbd balance for this operation"""
-    pass
+
+
+class NoResults(SteemEngineException):
+    """The server returned an empty response such as ``None`` ..."""
+
+
+class NoSteemEngineInstance(SteemEngineException):
+    """Raised when :attr:`._seng_instance` on a :class:`.SteemEngineInstanceInject` based object is ``None``"""
 

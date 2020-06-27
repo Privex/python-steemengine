@@ -4,6 +4,7 @@ __pycache__
 .idea
 .vscode
 .pytest_cache
+.env
 
 # PyPi build files
 build
