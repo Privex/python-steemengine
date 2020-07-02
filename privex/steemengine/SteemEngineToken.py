@@ -5,7 +5,8 @@ from privex.jsonrpc import SteemEngineRPC
 from privex.steemengine import exceptions
 from privex.steemengine.SteemEngineHistory import SteemEngineHistory
 from privex.steemengine.exceptions import NoResults
-from privex.steemengine.objects import SEBalance, SETransaction, Token, SETrade, SEOrder, SETransactionInfo, conv_dec, AnyNum, SEPlacedOrder
+from privex.steemengine.objects import SEBalance, SETransaction, Token, SETrade, SEOrder, SETransactionInfo, conv_dec, AnyNum, \
+    SEPlacedOrder, SETicker
 from privex.helpers import empty, dec_round, r_cache, DictObject
 
 log = logging.getLogger(__name__)
@@ -389,6 +390,72 @@ class SteemEngineToken:
             orders = sorted(orders, key=lambda p: getattr(p, sort_by), reverse=sort_reverse)
         
         return list(orders)
+    
+    def get_tickers(self, limit=1000, offset=0, indexes=None, **query) -> List[SETicker]:
+        """
+        Retrieve a list of market tickers from Hive/SteemEngine as a list of :class:`.SETicker` objects.
+        
+        **Example**::
+        
+            >>> st = SteemEngineToken()
+            >>> tickers = st.get_tickers()
+            [
+                SETicker(
+                    symbol='ENG', volume=Decimal('72.08939798'), lastPrice=Decimal('0.02100000'), lowestAsk=Decimal('0.05998799'),
+                    highestBid=Decimal('0.02150500'), volumeExpiration=1593730710, lastDayPrice=Decimal('0.06196000'),
+                    lastDayPriceExpiration=1593646239, priceChange=Decimal('-0.04096000'), priceChangePercent='-66.11%', _id=1
+                ),
+                ...
+            ]
+            >>> tickers[0].lastPrice
+            Decimal('0.02100000')
+        
+
+        :param int limit:       Amount of tickers to retrieve
+        :param int offset:      Offset selection by this many rows (for pagination)
+        :param list indexes:    A list of dictionary indexes, e.g. ``[dict(descending=False, index='timestamp')]``
+        :param query: Query parameters as keyword arguments, e.g. ``symbol="ENG"`` or ``_id=5``
+        :return List[SETicker] tickers: Market tickers as a list of :class:`.SETicker` objects.
+        """
+        query = dict(query)
+        
+        res = self.rpc.find(
+            contract='market',
+            table=f'metrics',
+            query=query,
+            indexes=[] if empty(indexes, True, True) else indexes,
+            limit=limit, offset=offset
+        )
+
+        if empty(res):
+            raise NoResults("get_tickers got empty (None) response from API...")
+        
+        return list(SETicker.from_list(res, seng_ins=self))
+
+    def get_ticker(self, symbol: str, **query) -> SETicker:
+        """
+        Retrieve a ticker for a single symbol as a :class:`.SETicker` object.
+        
+        **Example**::
+        
+            >>> st = SteemEngineToken(network='hive')
+            >>> tk = st.get_ticker('BEE')
+            >>> tk.lastPrice
+            Decimal('0.79650010')
+            >>> tk.lowestAsk
+            Decimal('0.88000000')
+        
+        :param str symbol: The token symbol to retrieve the ticker for, e.g. ``ENG`` or ``SGTK``
+        :param query: Additional query parameters as keyword arguments, e.g. ``_id=5``
+        :return SETicker ticker: The ticker data as a :class:`.SETicker` object.
+        """
+        symbol = symbol.upper()
+        tickers = self.get_tickers(symbol=symbol, **query)
+        
+        if empty(tickers, True, True):
+            raise NoResults(f"No ticker found for symbol {symbol}")
+        
+        return tickers[0]
 
     def find_steem_tx(self, tx_data: dict, last_blocks=15) -> Optional[dict]:
         """
@@ -755,6 +822,9 @@ class SteemEngineToken:
     @r_cache(lambda self, txid: f"pvx_seng:tx_info:{txid}", 30)
     def get_transaction_info(self, txid: str) -> SETransactionInfo:
         return SETransactionInfo.from_dict(self.block_rpc.getTransactionInfo(txid=txid))
+
+    def __iter__(self):
+        yield ()
 
 
 """

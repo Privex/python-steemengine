@@ -92,7 +92,7 @@ class ObjBase:
 class SteemEngineInstanceInject(DictDataClass):
     _seng_instance: "privex.steemengine.SteemEngineToken.SteemEngineToken"
 
-    class _DictConfig:
+    class DictConfig:
         dict_exclude = ['_seng_instance']
     
     def set_seng_instance(self, seng_ins: "privex.steemengine.SteemEngineToken.SteemEngineToken"):
@@ -103,6 +103,8 @@ class SteemEngineInstanceInject(DictDataClass):
         if seng_ins:
             obj = dict(obj)
             obj['_seng_instance'] = seng_ins
+        # if seng_ins:
+        # s._seng_instance = seng_ins
         return super().from_dict(obj)
     
     @classmethod
@@ -506,3 +508,62 @@ class SETransactionInfo(DictDataClass):
             except json.JSONDecodeError as e:
                 log.warning("Failed to JSON decode SETransactionInfo.payload: %s %s", type(e), str(e))
                 log.debug("Content of payload: %s", self.payload)
+
+
+@dataclass
+class SETicker(SteemEngineInstanceInject):
+    symbol: str
+    volume: Decimal
+    lastPrice: Decimal
+    lowestAsk: Decimal
+    highestBid: Decimal
+    volumeExpiration: int = 0
+    lastDayPrice: Decimal = field(default_factory=Decimal)
+    lastDayPriceExpiration: int = 0
+    priceChange: Decimal = field(default_factory=Decimal)
+    priceChangePercent: str = "0%"
+    _id: int = 0
+    
+    raw_data: Union[dict, DictObject] = field(default_factory=DictObject, repr=False)
+    """The raw, unmodified data that was passed as kwargs, as a dictionary"""
+
+    # _seng_instance: "privex.steemengine.SteemEngineToken.SteemEngineToken" = field(default=None, repr=False)
+    """SteemEngineToken Instance"""
+    
+    def __post_init__(self):
+        self.volume = conv_dec(self.volume)
+        self.lastPrice = conv_dec(self.lastPrice)
+        self.lowestAsk = conv_dec(self.lowestAsk)
+        self.highestBid = conv_dec(self.highestBid)
+        self.lastDayPrice = conv_dec(self.lastDayPrice)
+        if empty(self.priceChange, zero=True):
+            if 'priceChangeSteem' in self.raw_data:
+                self.priceChange = conv_dec(self.raw_data['priceChangeSteem'])
+            elif 'priceChangeHive' in self.raw_data:
+                self.priceChange = conv_dec(self.raw_data['priceChangeHive'])
+
+    @property
+    def token(self) -> Optional[Token]:
+        """Returns a :class:`.Token` instance for the :attr:`.symbol` on SteemEngine"""
+        if not self._seng_instance:
+            raise NoSteemEngineInstance(f"{self.__class__.__name__}._seng_instance SteemEngine instance isn't initialised.")
+        return self._seng_instance.get_token(self.symbol)
+    
+    @property
+    def order_book_buy(self):
+        if not self._seng_instance:
+            raise NoSteemEngineInstance(f"{self.__class__.__name__}._seng_instance SteemEngine instance isn't initialised.")
+        return self._seng_instance.get_orderbook(self.symbol, direction='buy')
+
+    @property
+    def order_book_sell(self):
+        if not self._seng_instance:
+            raise NoSteemEngineInstance(f"{self.__class__.__name__}._seng_instance SteemEngine instance isn't initialised.")
+        return self._seng_instance.get_orderbook(self.symbol, direction='sell')
+
+    @property
+    def order_history(self):
+        if not self._seng_instance:
+            raise NoSteemEngineInstance(f"{self.__class__.__name__}._seng_instance SteemEngine instance isn't initialised.")
+        return self._seng_instance.order_history(self.symbol, limit=100)
+
