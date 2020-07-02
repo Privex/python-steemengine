@@ -1,3 +1,4 @@
+import functools
 import logging
 from decimal import Decimal, ROUND_DOWN, getcontext
 from typing import Union, List, Dict, Optional
@@ -8,6 +9,7 @@ from privex.steemengine.exceptions import NoResults
 from privex.steemengine.objects import SEBalance, SETransaction, Token, SETrade, SEOrder, SETransactionInfo, conv_dec, AnyNum, \
     SEPlacedOrder, SETicker
 from privex.helpers import empty, dec_round, r_cache, DictObject
+from privex.helpers.black_magic import caller_name
 
 log = logging.getLogger(__name__)
 getcontext().rounding = ROUND_DOWN
@@ -16,6 +18,54 @@ getcontext().rounding = ROUND_DOWN
 def round_str(amount: AnyNum, dp: AnyNum = 2) -> str:
     """Round ``amount`` to ``dp`` decimal places as a string"""
     return ('{0:.' + str(int(dp)) + 'f}').format(conv_dec(amount))
+
+
+def _cache_blacklisted(skip=3) -> bool:
+    try:
+        from privex.helpers.black_magic import calling_module, calling_function, caller_name
+        
+        # Exact module + function/method path match
+        if caller_name(skip=skip) in SteemEngineToken.CACHE_BLACKLIST:
+            return True
+        # Plain function name match
+        if calling_function(skip=skip) in SteemEngineToken.CACHE_BLACKLIST_FUNCS:
+            return True
+        
+        _mod = calling_module(skip=skip)
+        # Exact module path match
+        if _mod in SteemEngineToken.CACHE_BLACKLIST_MODS:
+            return True
+        # Sub-modules path match (e.g. if hello.world is blacklisted, then hello.world.example is also blacklisted)
+        for _m in SteemEngineToken.CACHE_BLACKLIST_MODS:
+            if _mod.startswith(_m + '.'):
+                return True
+    
+    except Exception:
+        log.exception("Failed to check blacklist for _cache_blacklisted. Falling back to standard r_cache.")
+    
+    return False
+
+
+def se_cache(cache_key: Union[str, callable], cache_time=300, *c_args, **c_kwargs):
+    """
+    Sometimes the :func:`.r_cache` decorator can cause problems, especially within an AsyncIO application.
+    
+    This wrapper allows :func:`.r_cache` to be disabled either globally by setting :attr:`.SteemEngineToken.CACHE` to ``False``,
+    or per function/method/module using caller blacklists such as :attr:`.SteemEngineToken.CACHE_BLACKLIST`
+    """
+    def _decorator(f):
+        @functools.wraps(f)
+        def wrapper(*args, **kwargs):
+            if _cache_blacklisted():
+                log.debug("caller is cache blacklisted! not using cache key '%s' - calling '%s' directly!", cache_key, f.__name__)
+                return f(*args, **kwargs)
+            if SteemEngineToken.CACHE:
+                log.debug("caching enabled! wrapped func '%s' - accessing cache key '%s' via r_cache", f.__name__, cache_key)
+                return r_cache(cache_key, cache_time, *c_args, **c_kwargs)(f)(*args, **kwargs)
+            log.debug("caching disabled! not using cache key '%s' - calling '%s' directly!", cache_key, f.__name__)
+            return f(*args, **kwargs)
+        return wrapper
+    return _decorator
 
 
 class SteemEngineToken:
@@ -60,6 +110,15 @@ class SteemEngineToken:
     native_coin: str
     DEFAULT_BLOCKCHAIN_URL = '/rpc/blockchain'
     
+    CACHE = True
+    """Global cache switch. Set ``SteemEngineToken.CACHE = False`` to disable the :func:`.se_cache` caching decorator"""
+    CACHE_BLACKLIST = []
+    """A list of fully qualified module paths to functions/methods which always bypass :func:`.se_cache`"""
+    CACHE_BLACKLIST_FUNCS = []
+    """A list of plain function names which always bypass :func:`.se_cache`"""
+    CACHE_BLACKLIST_MODS = []
+    """A list of fully qualified module names which always bypass :func:`.se_cache`"""
+
     @property
     def steem(self):
         """
@@ -117,7 +176,7 @@ class SteemEngineToken:
         log.debug('Initialized SteemEngineToken with args: %s %s %s', network_account, history_conf, rpc_args)
 
     @property
-    @r_cache(lambda self: f"pvx_seng:token:{self.native_coin}")
+    @se_cache(lambda self: f"pvx_seng:token:{self.native_coin}")
     def native_token(self) -> Token:
         """Returns the :class:`.Token` object for the native coin :attr:`.native_coin`"""
         return self.get_token(self.native_coin)
@@ -160,7 +219,7 @@ class SteemEngineToken:
             contract='tokens',
             table='balances',
             query=dict(account=user)
-        )))
+        ), seng_ins=self))
 
     def get_token_balance(self, user, symbol) -> Decimal:
         """
@@ -184,7 +243,7 @@ class SteemEngineToken:
         log.debug('Did not find token balance matching %s, returning 0', symbol)
         return Decimal(0)
 
-    @r_cache(lambda self, user: f"pvx_seng:account_exists:{user}", 30)
+    @se_cache(lambda self, user: f"pvx_seng:account_exists:{user}", 30)
     def account_exists(self, user) -> bool:
         """
         Helper function to verify if a given user exists on Steem.
@@ -203,7 +262,7 @@ class SteemEngineToken:
         log.debug('Checking if user %s exists', user)
         return len(self.steem.rpc.get_account(user)) > 0
 
-    @r_cache(lambda self, limit=1000, offset=0: f"pvx_seng:list_tokens:{limit}:{offset}", 120)
+    @se_cache(lambda self, limit=1000, offset=0: f"pvx_seng:list_tokens:{limit}:{offset}", 120)
     def list_tokens(self, limit=1000, offset=0) -> List[Token]:
         """
         Returns a list of all tokens as :class:`.Token` objects.
@@ -513,7 +572,7 @@ class SteemEngineToken:
         log.debug('Getting TX history for user %s, symbol %s, limit %s, offset %s', user, symbol, limit, offset)
         return list(SETransaction.from_list(self.history_rpc.get_history(account=user, symbol=symbol, limit=limit, offset=offset)))
 
-    @r_cache(lambda self, symbol: f"pvx_seng:token:{symbol}", 60)
+    @se_cache(lambda self, symbol: f"pvx_seng:token:{symbol}", 60)
     def get_token(self, symbol) -> Optional[Token]:
         """
         Get the token object for an individual token.
@@ -819,7 +878,7 @@ class SteemEngineToken:
             
         return res
 
-    @r_cache(lambda self, txid: f"pvx_seng:tx_info:{txid}", 30)
+    @se_cache(lambda self, txid: f"pvx_seng:tx_info:{txid}", 30)
     def get_transaction_info(self, txid: str) -> SETransactionInfo:
         return SETransactionInfo.from_dict(self.block_rpc.getTransactionInfo(txid=txid))
 

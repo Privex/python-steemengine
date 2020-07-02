@@ -42,7 +42,7 @@ with open("README.md", "r") as fh:
 setup(
     name='privex_steemengine',
 
-    version='2.1.0',
+    version='2.2.0',
 
     description='A small library for querying and interacting with the SteemEngine network (https://steem-engine.com)',
     long_description=long_description,
