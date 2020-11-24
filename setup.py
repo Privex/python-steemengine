@@ -42,9 +42,9 @@ with open("README.md", "r") as fh:
 setup(
     name='privex_steemengine',
 
-    version='2.2.0',
+    version='2.3.0',
 
-    description='A small library for querying and interacting with the SteemEngine network (https://steem-engine.com)',
+    description='A small library for querying and interacting with the Steem/HiveEngine network (https://steem-engine.com / https://hive-engine.com)',
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Privex/python-steemengine",
@@ -54,13 +54,19 @@ setup(
     license='MIT',
     install_requires=[
         'privex-jsonrpc>=1.0.0',
-        'beem>=0.24.0',
+        'beem>=0.24.15',
         'requests>=2.20.1',
-        'privex-helpers>=2.15.0'
+        'privex-helpers>=3.0.0'
     ],
-    packages=find_packages(),
+    extras_require={
+        "dev": ["pytest", "pytest-cov", "pytest-asyncio", "coverage", "codecov", "jupyter"],
+    },
+    packages=find_packages(exclude=['tests', 'tests.*', 'test.*', 'privex.db', 'privex.db.*']),
     classifiers=[
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],

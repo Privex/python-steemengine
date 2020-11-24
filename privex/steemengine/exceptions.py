@@ -60,3 +60,6 @@ class NoResults(SteemEngineException):
 class NoSteemEngineInstance(SteemEngineException):
     """Raised when :attr:`._seng_instance` on a :class:`.SteemEngineInstanceInject` based object is ``None``"""
 
+class WrongNetwork(SteemEngineException):
+    """The current RPC is on the wrong network, high risk of broadcasting or receiving data to/from the wrong blockchain network"""
+

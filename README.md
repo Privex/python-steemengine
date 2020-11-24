@@ -1,6 +1,13 @@
 # Python SteemEngine
 
-[![Build Status](https://travis-ci.com/Privex/python-steemengine.svg?branch=master)](https://travis-ci.com/Privex/python-steemengine)
+[![Documentation Status](https://readthedocs.org/projects/python-steemengine/badge/?version=latest)](https://python-steemengine.readthedocs.io/en/latest/?badge=latest) 
+[![Build Status](https://travis-ci.com/Privex/python-steemengine.svg?branch=master)](https://travis-ci.com/Privex/python-steemengine) 
+[![Codecov](https://img.shields.io/codecov/c/github/Privex/python-steemengine)](https://codecov.io/gh/Privex/python-steemengine)
+[![PyPi Version](https://img.shields.io/pypi/v/privex-steemengine.svg)](https://pypi.org/project/privex-steemengine/)
+![License Button](https://img.shields.io/pypi/l/privex-steemengine) 
+![PyPI - Downloads](https://img.shields.io/pypi/dm/privex-steemengine)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/privex-steemengine) 
+![GitHub last commit](https://img.shields.io/github/last-commit/Privex/python-steemengine)
 
 A small library for querying and interfacing with the [SteemEngine](https://steem-engine.com) network, including
 sending and issuing tokens.
@@ -48,7 +55,11 @@ pip3 install privex-steemengine
 ```python
 from decimal import Decimal
 from privex.steemengine import SteemEngineToken
+
+# The default network is "steem"
 s = SteemEngineToken()
+# For interacting with and broadcasting transactions on HiveEngine, set network="hive"
+s = SteemEngineToken(network="hive")
 
 # Get all SteemEngine transactions for @someguy123 
 for tx in s.list_transactions('someguy123'):

@@ -1,14 +1,14 @@
 import functools
 import logging
 from decimal import Decimal, ROUND_DOWN, getcontext
-from typing import Union, List, Dict, Optional
+from typing import Union, List, Dict, Set, Optional
 from privex.jsonrpc import SteemEngineRPC
 from privex.steemengine import exceptions
 from privex.steemengine.SteemEngineHistory import SteemEngineHistory
-from privex.steemengine.exceptions import NoResults
+from privex.steemengine.exceptions import NoResults, WrongNetwork
 from privex.steemengine.objects import SEBalance, SETransaction, Token, SETrade, SEOrder, SETransactionInfo, conv_dec, AnyNum, \
     SEPlacedOrder, SETicker
-from privex.helpers import empty, dec_round, r_cache, DictObject
+from privex.helpers import empty, empty_if, dec_round, r_cache, DictObject
 from privex.helpers.black_magic import caller_name
 
 log = logging.getLogger(__name__)
@@ -67,6 +67,7 @@ def se_cache(cache_key: Union[str, callable], cache_time=300, *c_args, **c_kwarg
         return wrapper
     return _decorator
 
+BEEM = Union["beem.steem.Steem", "beem.hive.Hive"]
 
 class SteemEngineToken:
     """
@@ -108,6 +109,61 @@ class SteemEngineToken:
 
     network: str
     native_coin: str
+    default_nodes: Union[Dict[str, List[str]], DictObject] = DictObject(
+        steem=[
+            'https://api.steemit.com',
+            'https://api.steemdb.online',
+            'https://api.justyy.com',
+            'https://api.steemitdev.com',
+            'https://api.steem.buzz',
+        ],
+        hive=[
+            'https://hived.privex.io',
+            'https://anyx.io',
+            'https://hived.hive-engine.com',
+            'https://api.openhive.network',
+            'https://fin.hive.3speak.co',
+            'https://api.hive.blog',
+        ],
+    )
+    """
+    This is a class-level attribute (shared by all instances, instead of specific to one instance),
+    which contains a list of RPC nodes to be used by default for each network.
+
+    To add additional nodes to the list for a network::
+
+        >>> from privex.steemengine import SteemEngineToken
+        >>> SteemEngineToken.default_nodes.hive.append("https://hived.example.com")
+        >>> # Or if you want to add nodes in bulk
+        >>> SteemEngineToken.default_nodes.hive += ['https://hived.example.com', 'https://api.example.hive', 'https://another.example']
+
+    To remove a specific RPC node for a network::
+        
+        >>> SteemEngineToken.default_nodes.hive.remove('https://anyx.io')
+
+    If you want to entirely replace the list of default nodes for a network (or both), we recommend that you DON'T attempt
+    to overwrite ``default_nodes`` or one of the lists contained within it - otherwise there's a risk that some instances 
+    of :class:`.SteemEngineToken` might still be referencing the original DictObject / list objects.
+
+    Instead, you should clear the list, and then inject the nodes you want to use::
+        
+        >>> SteemEngineToken.default_nodes.steem.clear()
+        >>> SteemEngineToken.default_nodes.steem += ['https://steemd.example.com', 'https://api.example.steem', 'https://another.example']
+
+
+    """
+
+    use_shared_instances: bool = False
+    """
+    This is a class-level attribute that controls whether instances of :class:`.SteemEngineToken` should use Beem's shared instances.
+    
+    To prevent issues when dealing with more than one network in the same application, only the network that the
+    first :class:`.SteemEngineToken` instance uses, will use / create a shared instance.
+
+    If this is disabled, then new instances will instead automatically create a brand new instance of Beem, instead of
+    trying to use a shared instance.
+    """
+
     DEFAULT_BLOCKCHAIN_URL = '/rpc/blockchain'
     
     CACHE = True
@@ -120,7 +176,7 @@ class SteemEngineToken:
     """A list of fully qualified module names which always bypass :func:`.se_cache`"""
 
     @property
-    def steem(self):
+    def steem(self) -> Union["beem.steem.Steem", "beem.hive.Hive"]:
         """
         When a method calls ``self.steem`` , this property will first try to return :py:attr:`._steem`
         if it was previously called. Otherwise, it will automatically initialise :py:attr:`._steem`
@@ -131,14 +187,69 @@ class SteemEngineToken:
 
         :return beem.steem.Steem steem: An instance of :class:`beem.steem.Steem`
         """
-        
+        cls = SteemEngineToken
         if not self._steem_ins[self.network]:
-            if self.network == "hive":
-                self._steem_ins[self.network] = self.custom_beem(["https://hived.privex.io", "https://anyx.io"])
-            else:
-                from beem.instance import shared_steem_instance
-                self._steem_ins[self.network] = shared_steem_instance()
-        return self._steem_ins[self.network]
+            from beem.instance import SharedInstance, shared_steem_instance
+            nodes = cls.default_nodes[self.network]
+            if cls.use_shared_instances:
+                if SharedInstance.instance is None:
+                    SharedInstance.instance = self.custom_beem(nodes, network=self.network)
+                else:
+                    # Check to make sure no other network is already using a shared instance before we try to use the shared instance.
+                    for k, v in cls._steem_ins:
+                        if v == SharedInstance.instance:
+                            log.debug(f"One or more networks are already using a shared instance. Network {k} appears to be using one.")
+                            log.debug(f"For safety, we're going to create a new instance for the network '{self.network}' instead "
+                                      f"of using a shared instance that may be on the wrong network.")
+                            cls._steem_ins[self.network] = self.custom_beem(nodes, network=self.network)
+                            return cls._steem_ins[self.network]
+
+                cls._steem_ins[self.network] = SharedInstance.instance
+                return cls._steem_ins[self.network]
+
+            cls._steem_ins[self.network] = self.custom_beem(nodes, network=self.network)
+        return cls._steem_ins[self.network]
+
+    @steem.setter
+    def steem(self, value: BEEM):
+        """
+        This is a property setter which allows a user to override the instance used by ``.steem``
+
+        To manually set the Beem instance used by a :class:`.SteemEngineToken` instance::
+            
+            >>> st = SteemEngineToken(network="hive")
+            >>> st.steem = st.custom_beem(['https://hived.privex.io', 'https://anyx.io'], "hive")
+
+        """
+
+        SteemEngineToken._steem_ins[self.network] = value
+
+    def set_beem(self, nodes: Union[str, List[str]] = None, network: str = None, *args, **kwargs) -> BEEM:
+        """
+        Create and override the Beem instance used by this instance::
+
+            >>> st = SteemEngineToken(network="hive")
+            >>> st.set_beem(["https://hived.privex.io", "https://anyx.io"])
+
+        """
+        network = empty_if(network, self.network)
+        
+        SteemEngineToken._steem_ins[network] = s = self.custom_beem(nodes, *args, network=network, **kwargs)
+        return s
+
+    def verify_network(self, network: str = None, inst: Optional[BEEM] = None):
+        """
+        Check that the current RPC node is on the correct blockchain network.
+
+        :raises WrongNetwork: When the current RPC node of :attr:`.steem` or ``inst``'s network doesn't match ``network`` / ``self.network``
+        """
+        network = empty_if(network, self.network).lower()
+        inst = empty_if(inst, self.steem)
+        ins_net = inst.get_blockchain_name().lower()
+        if ins_net != network:
+            raise WrongNetwork(f"The RPC node '{inst.rpc.url}' is on the WRONG NETWORK. '{inst.rpc.url}' is a '{ins_net}' node - but your network is set to: {network}")
+        return True
+        
 
     def __init__(self, network_account='ssc-mainnet1', history_conf: dict = None, network="steem", **rpc_args):
         """
@@ -151,11 +262,20 @@ class SteemEngineToken:
                                 Steem Smart Contracts Main Network
         :param history_conf:    A dictionary containing kwargs to pass to :py:class:`.SteemEngineHistory` constructor
         :param rpc_args:        Any additional kwargs will be passed to the :py:class:`privex.jsonrpc.SteemEngineRPC` constructor
+
+        :keyword str|list nodes: If the ``nodes`` kwarg is specified, e.g. ``nodes=['https://api.something.com']``, then
+                                 Beem will be configured during ``__init__`` to use those specific RPC nodes.
+
         """
         rpc_args = dict(rpc_args)
         history_conf = {} if history_conf is None else history_conf
         network = network.lower()
         self.network = network
+
+        if 'nodes' in rpc_args:
+            nodes = rpc_args.pop('nodes')
+            self.set_beem(nodes)
+
         native_coin = 'STEEMP'
         if network == "hive":
             rpc_args['hostname'] = rpc_args.get('hostname', 'api.hive-engine.com')
@@ -182,21 +302,30 @@ class SteemEngineToken:
         return self.get_token(self.native_coin)
 
     @staticmethod
-    def custom_beem(node: Union[str, list] = "", *args, **kwargs):
+    def custom_beem(node: Union[str, list] = "", *args, network="steem", **kwargs) -> BEEM:
         """
-        Override the beem Steem instance (:py:attr:`._steem`) used by this class.
+        Generates a new Beem :class:`.Steem` / :class:`.Hive` instance
 
-        Useful if you'd rather not configure beem's shared instance for some reason.
+        Example usage::
 
-        Example usage:
+            >>> from privex.steemengine import SteemEngineToken
+            >>> steem = SteemEngineToken.custom_beem(node=['https://steemd.privex.io', 'https://api.steemit.com'])
+            >>> steem.get_blockchain_name()
+            'steem'
 
-        >>> from privex.steemengine import SteemEngineToken
-        >>> SteemEngineToken.custom_beem(node=['https://steemd.privex.io', 'https://api.steemit.com'])
+        This can be used to manually set the Beem instance used by a :class:`.SteemEngineToken` instance::
+            
+            >>> st = SteemEngineToken(network="hive")
+            >>> st.steem = st.custom_beem(['https://hived.privex.io', 'https://anyx.io'], "hive")
 
         """
         from beem.steem import Steem
-        SteemEngineToken._steem = Steem(node, *args, **kwargs)
-        return SteemEngineToken._steem
+        from beem.hive import Hive
+        network = network.lower()
+        #SteemEngineToken._steem = Steem(node, *args, **kwargs)
+        if network == "hive":
+            return Hive(node, *args, **kwargs)
+        return Steem(node, *args, **kwargs)
 
     def get_balances(self, user) -> List[SEBalance]:
         """
@@ -259,6 +388,8 @@ class SteemEngineToken:
         :param str user: Steem username to lookup
         :return bool exists: True if the user exists, False if they don't
         """
+        # Make sure we're on the correct network before checking
+        self.verify_network()
         log.debug('Checking if user %s exists', user)
         return len(self.steem.rpc.get_account(user)) > 0
 
@@ -697,6 +828,10 @@ class SteemEngineToken:
                 memo=memo
             )
         )
+        
+        # Make sure we're on the correct network before broadcasting
+        self.verify_network()
+
         j = self.steem.custom_json(self.network_account, custom, [from_acc])
         if find_tx:    # Find the transaction on the blockchain to get TXID and other data from it.
             tx = self.find_steem_tx(j)
@@ -776,6 +911,8 @@ class SteemEngineToken:
                 quantity=('{0:.' + str(t['precision']) + 'f}').format(amount)
             )
         )
+        # Make sure we're on the correct network before broadcasting
+        self.verify_network()
         j = self.steem.custom_json(self.network_account, custom, [t['issuer']])
         if find_tx:    # Find the transaction on the blockchain to get TXID and other data from it.
             tx = self.find_steem_tx(j)
@@ -866,6 +1003,8 @@ class SteemEngineToken:
             direction=action, custom_tx=custom, _seng_instance=self
         )
         log.debug("Broadcasting custom_json from %s to %s - data: %s", user, self.network_account, custom)
+        # Make sure we're on the correct network before broadcasting
+        self.verify_network()
         j = self.steem.custom_json(self.network_account, custom, [user])
         res.broadcast_result = j
         

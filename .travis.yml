@@ -1,11 +1,23 @@
 dist: bionic
+services:
+  - memcached
+  - redis
 language: python
 python:
   - "3.6"
   - "3.7"
-  - "3.7-dev"
-  - "3.8-dev"
+  - "3.7"
+  - "3.8"
+  - "3.9"
   - "nightly"
+jobs:
+  allow_failures:
+    # Sometimes nightly builds are broken, or contain breaking changes that affect dependencies we have
+    # no control over. Thus we don't want a failed nightly run to cause Travis to consider the build broken.
+    - python: 'nightly'
+    - python: '3.9'
 install:
-  - pip install .
-script: pytest tests.py
+  - pip install '.[dev]'
+script: pytest --cov=./privex -rxXs -v
+after_success:
+  - codecov
