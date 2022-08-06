@@ -71,7 +71,7 @@ class SteemEngineHistory:
         >>>     print(tx['timestamp'], tx['symbol'], tx['quantity'], tx['memo'])
 
     """
-    DEF_HOST = 'api.steem-engine.com'
+    DEF_HOST = 'api.steem-engine.net'
     DEF_URL = 'accounts/history'
     # Using a python-requests session will help to encourage connection re-use, e.g. HTTP Keep-alive
     # Since this is a static attribute, it will be shared across ALL instances of the class.
